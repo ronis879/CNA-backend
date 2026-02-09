@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from templates_registry import TEMPLATE_REGISTRY
 
-app = FastAPI(title="CNA Backend", version="Phase 3")
+app = FastAPI(title="CNA Backend", version="Phase C")
 
 # -------------------------
 # Utilities
@@ -17,21 +17,21 @@ def resolve_template(law: str, notice_type: str):
     return TEMPLATE_REGISTRY[law].get(notice_type)
 
 # -------------------------
-# Health Check
+# Health
 # -------------------------
 @app.get("/")
 def root():
-    return {"message": "CNA Phase 3 is running"}
+    return {"message": "CNA Phase C is running"}
 
 @app.get("/health")
 def health():
     return {
         "status": "OK",
-        "module": "CNA Phase 3 – Analysis + Draft Engine"
+        "module": "CNA Phase C – Draft Engine"
     }
 
 # -------------------------
-# Template Resolver
+# Phase A – Template Resolve
 # -------------------------
 class TemplateResolveRequest(BaseModel):
     law: str
@@ -47,7 +47,7 @@ def resolve_template_api(payload: TemplateResolveRequest):
     return {"template_selected": result}
 
 # -------------------------
-# Phase B1 – Notice Analyzer
+# Phase B – Notice Analysis
 # -------------------------
 @app.post("/analyze-notice")
 def analyze_notice(payload: dict):
@@ -56,7 +56,7 @@ def analyze_notice(payload: dict):
     section = payload.get("section")
 
     if not law or not notice_type or not section:
-        return {"error": "law, notice_type, and section are required"}
+        return {"error": "law, notice_type, section required"}
 
     law = law.upper()
     notice_type = notice_type.upper()
@@ -86,7 +86,7 @@ def analyze_notice(payload: dict):
                 "notice_type": "DRC-01",
                 "section": "74",
                 "risk_level": "Very High",
-                "fraud_category": "Fraud / Wilful Misstatement",
+                "fraud_category": "Fraud",
                 "mandatory_fields": [
                     "financial_year",
                     "taxpayer_name",
@@ -95,23 +95,25 @@ def analyze_notice(payload: dict):
                     "supporting_documents"
                 ],
                 "suggested_template": "GST_DRC01_74_REPLY",
-                "next_action": "High-risk detailed defense required"
+                "next_action": "Detailed defence required"
             }
 
-    return {"error": "Unsupported notice type or law"}
+    return {"error": "Unsupported notice"}
 
 # -------------------------
-# Phase 2 – Draft Generator
+# Phase C – Draft Generator
 # -------------------------
 class GSTDraftRequest(BaseModel):
     notice_type: str
     section: str
     financial_year: str
     taxpayer_name: str
+    gstin: str
     issue_summary: str
 
 @app.post("/draft/gst-reply")
 def generate_gst_draft(data: GSTDraftRequest):
+
     draft = f"""
 To  
 The Proper Officer  
@@ -123,16 +125,19 @@ Financial Year: {data.financial_year}
 Respected Sir/Madam,
 
 This is in reference to the above-mentioned notice issued to
-{data.taxpayer_name}.
+{data.taxpayer_name} (GSTIN: {data.gstin}).
 
-Issue:
+Issue as stated in notice:
 {data.issue_summary}
 
-The taxpayer submits that all statutory compliances have been duly complied with.
-Any apparent discrepancy is explainable and non-fraudulent.
+At the outset, the taxpayer submits that all statutory
+compliances have been duly complied with. Any apparent
+discrepancy may be due to clerical or reconciliation differences,
+which are explainable with supporting records.
 
-It is requested that this reply be kindly considered and an opportunity of being
-heard be granted before passing any adverse order.
+The taxpayer humbly requests your good office to kindly
+consider this reply and grant an opportunity of being heard
+before passing any adverse order.
 
 Thanking you.
 
