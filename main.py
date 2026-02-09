@@ -65,6 +65,63 @@ class GSTDraftRequest(BaseModel):
 # -------------------------
 @app.post("/draft/gst-reply")
 def generate_gst_draft(data: GSTDraftRequest):
+@app.post("/analyze-notice")
+def analyze_notice(payload: dict):
+    law = payload.get("law")
+    notice_type = payload.get("notice_type")
+    section = payload.get("section")
+
+    if not law or not notice_type or not section:
+        return {
+            "error": "law, notice_type, and section are required"
+        }
+
+    law = law.upper()
+    notice_type = notice_type.upper()
+    section = str(section)
+
+    # --- GST Rules Engine (Phase B1) ---
+    if law == "GST" and notice_type == "DRC-01":
+        if section == "73":
+            return {
+                "law": "GST",
+                "notice_type": "DRC-01",
+                "section": "73",
+                "nature": "Demand / Show Cause Notice",
+                "risk_level": "High",
+                "fraud_category": "Non-Fraud",
+                "mandatory_fields": [
+                    "financial_year",
+                    "taxpayer_name",
+                    "gstin",
+                    "issue_summary"
+                ],
+                "suggested_template": "GST_DRC01_73_REPLY",
+                "next_action": "Collect missing fields and generate draft"
+            }
+
+        if section == "74":
+            return {
+                "law": "GST",
+                "notice_type": "DRC-01",
+                "section": "74",
+                "nature": "Demand / Show Cause Notice",
+                "risk_level": "Very High",
+                "fraud_category": "Fraud / Wilful Misstatement",
+                "mandatory_fields": [
+                    "financial_year",
+                    "taxpayer_name",
+                    "gstin",
+                    "issue_summary",
+                    "supporting_documents"
+                ],
+                "suggested_template": "GST_DRC01_74_REPLY",
+                "next_action": "High-risk notice – detailed defense required"
+            }
+
+    return {
+        "error": "Unsupported notice type or law"
+    }
 
     draft = f"""
 To  
@@ -101,4 +158,5 @@ Authorized Signatory
         "status": "Draft Generated",
         "draft_text": draft.strip()
     }
+
 
