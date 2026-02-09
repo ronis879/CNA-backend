@@ -1,5 +1,14 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from templates_registry import TEMPLATE_REGISTRY
+def resolve_template(law: str, notice_type: str):
+    law = law.upper()
+    notice_type = notice_type.upper()
+
+    if law not in TEMPLATE_REGISTRY:
+        return None
+
+    return TEMPLATE_REGISTRY[law].get(notice_type)
 
 app = FastAPI(title="CNA Backend", version="Phase 2")
 
@@ -15,6 +24,30 @@ def health():
     return {
         "status": "OK",
         "module": "CNA Phase 2 – Draft Engine"
+    }
+class TemplateResolveRequest(BaseModel):
+    law: str
+    notice_type: str
+
+@app.post("/resolve-template")
+def resolve_template_api(payload: TemplateResolveRequest):
+    result = resolve_template(payload.law, payload.notice_type)
+
+    if not result:
+        return {"error": "No matching template found"}
+
+    return {
+        "template_selected": result
+    }
+
+
+    result = resolve_template(law, notice_type)
+
+    if not result:
+        return {"error": "No matching template found"}
+
+    return {
+        "template_selected": result
     }
 
 # -------------------------
@@ -68,3 +101,4 @@ Authorized Signatory
         "status": "Draft Generated",
         "draft_text": draft.strip()
     }
+
