@@ -1,21 +1,19 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from typing import Optional
 
 from templates_registry import TEMPLATE_REGISTRY
-from template_metadata import find_template
+from template_metadata import TEMPLATE_METADATA
 
-# -------------------------------------------------------------------
-# App Init
-# -------------------------------------------------------------------
 app = FastAPI(
     title="CNA Backend",
-    version="Phase C2.1",
+    version="Phase C2.2",
     description="AI-powered backend for tax & compliance drafting"
 )
 
-# -------------------------------------------------------------------
-# Utility: Resolve Template (Registry)
-# -------------------------------------------------------------------
+# -------------------------------------------------
+# Utilities
+# -------------------------------------------------
 def resolve_template(law: str, notice_type: str):
     law = law.upper()
     notice_type = notice_type.upper()
@@ -25,9 +23,10 @@ def resolve_template(law: str, notice_type: str):
 
     return TEMPLATE_REGISTRY[law].get(notice_type)
 
-# -------------------------------------------------------------------
+
+# -------------------------------------------------
 # Health & Root
-# -------------------------------------------------------------------
+# -------------------------------------------------
 @app.get("/")
 def root():
     return {"message": "CNA Backend is running"}
@@ -36,36 +35,18 @@ def root():
 def health():
     return {
         "status": "OK",
-        "module": "CNA Phase C2.1 – Draft Intelligence Engine"
+        "module": "CNA Draft Engine",
+        "phase": "C2.2"
     }
 
-# -------------------------------------------------------------------
-# Data Models
-# -------------------------------------------------------------------
+
+# -------------------------------------------------
+# Phase B – Template Resolver
+# -------------------------------------------------
 class TemplateResolveRequest(BaseModel):
     law: str
     notice_type: str
 
-class GSTDraftRequest(BaseModel):
-    notice_type: str
-    section: str
-    financial_year: str
-    taxpayer_name: str
-    gstin: str
-    issue_summary: str
-
-class CNADraftRequest(BaseModel):
-    law: str
-    notice_type: str
-    section: str
-    financial_year: str
-    taxpayer_name: str
-    gstin: str
-    issue_summary: str
-
-# -------------------------------------------------------------------
-# API: Resolve Template (Registry only)
-# -------------------------------------------------------------------
 @app.post("/resolve-template")
 def resolve_template_api(payload: TemplateResolveRequest):
     result = resolve_template(payload.law, payload.notice_type)
@@ -75,46 +56,73 @@ def resolve_template_api(payload: TemplateResolveRequest):
 
     return {"template_selected": result}
 
-# -------------------------------------------------------------------
-# API: Analyze Notice (Metadata Engine)  ✅ Phase C2.1
-# -------------------------------------------------------------------
+
+# -------------------------------------------------
+# Phase B1 – Notice Analysis Engine
+# -------------------------------------------------
+class AnalyzeNoticeRequest(BaseModel):
+    law: str
+    notice_type: str
+    section: str
+
 @app.post("/analyze-notice")
-def analyze_notice(payload: dict):
-    law = payload.get("law")
-    notice_type = payload.get("notice_type")
-    section = payload.get("section")
+def analyze_notice(payload: AnalyzeNoticeRequest):
+    law = payload.law.upper()
+    notice_type = payload.notice_type.upper()
+    section = str(payload.section)
 
-    if not law or not notice_type or not section:
-        return {
-            "error": "law, notice_type, and section are required"
-        }
+    if law == "GST" and notice_type == "DRC-01":
+        if section == "73":
+            return {
+                "law": "GST",
+                "notice_type": "DRC-01",
+                "section": "73",
+                "risk_level": "High",
+                "fraud_category": "Non-Fraud",
+                "mandatory_fields": [
+                    "financial_year",
+                    "taxpayer_name",
+                    "gstin",
+                    "issue_summary"
+                ],
+                "suggested_template": "GST_DRC01_73_REPLY",
+                "next_action": "Proceed to draft generation"
+            }
 
-    template = find_template(law, notice_type, section)
+        if section == "74":
+            return {
+                "law": "GST",
+                "notice_type": "DRC-01",
+                "section": "74",
+                "risk_level": "Very High",
+                "fraud_category": "Fraud / Wilful Misstatement",
+                "mandatory_fields": [
+                    "financial_year",
+                    "taxpayer_name",
+                    "gstin",
+                    "issue_summary",
+                    "supporting_documents"
+                ],
+                "suggested_template": "GST_DRC01_74_REPLY",
+                "next_action": "High-risk notice – detailed defense required"
+            }
 
-    if not template:
-        return {
-            "error": "No template available for given notice"
-        }
+    return {"error": "Unsupported notice type or law"}
 
-    return {
-        "law": template["law"],
-        "notice_type": template["notice_type"],
-        "section": template["section"],
-        "risk_level": template["risk_level"],
-        "fraud_category": template["fraud_category"],
-        "mandatory_fields": template["mandatory_fields"],
-        "supported_actions": template["supported_actions"],
-        "draft_styles": template["draft_styles"],
-        "suggested_template": template["template_id"],
-        "next_action": "Proceed to draft generation"
-    }
 
-# -------------------------------------------------------------------
-# API: GST Draft Generator (Phase B)
-# -------------------------------------------------------------------
+# -------------------------------------------------
+# Phase C1 – GST Draft Generator
+# -------------------------------------------------
+class GSTDraftRequest(BaseModel):
+    notice_type: str
+    section: str
+    financial_year: str
+    taxpayer_name: str
+    gstin: str
+    issue_summary: str
+
 @app.post("/draft/gst-reply")
 def generate_gst_draft(data: GSTDraftRequest):
-
     draft = f"""
 To  
 The Proper Officer  
@@ -125,25 +133,24 @@ Financial Year: {data.financial_year}
 
 Respected Sir/Madam,
 
-This is in reference to the above-mentioned notice issued to
-{data.taxpayer_name} (GSTIN: {data.gstin}).
+This is in reference to the above-mentioned notice issued to {data.taxpayer_name}.
 
 The notice states the following issue:
 {data.issue_summary}
 
-At the outset, the taxpayer submits that all statutory
-compliances have been duly complied with. Any apparent
-discrepancy may be due to clerical or reconciliation differences,
-which are explainable with supporting records.
+At the outset, the taxpayer submits that all statutory compliances
+have been duly complied with. Any apparent discrepancy may be due
+to clerical or reconciliation differences, which are explainable
+with supporting records.
 
-The taxpayer humbly requests your good office to kindly
-consider this reply and grant an opportunity of being heard
-before passing any adverse order.
+The taxpayer humbly requests your good office to kindly consider
+this reply and grant an opportunity of being heard before passing
+any adverse order.
 
 Thanking you.
 
 Yours faithfully,  
-Authorized Signatory  
+Authorized Signatory
 """
 
     return {
@@ -151,46 +158,75 @@ Authorized Signatory
         "draft_text": draft.strip()
     }
 
-# -------------------------------------------------------------------
-# API: CNA Unified Draft (Phase C1)
-# -------------------------------------------------------------------
+
+# -------------------------------------------------
+# Phase C2.2 – Unified CNA Draft Engine (FINAL)
+# -------------------------------------------------
+class CNADraftRequest(BaseModel):
+    law: str
+    notice_type: str
+    section: str
+    financial_year: str
+    taxpayer_name: str
+    gstin: str
+    issue_summary: str
+    drafting_mode: Optional[str] = "normal"  # OPTIONAL & DEFAULT
+
 @app.post("/cna/draft")
 def cna_draft(payload: CNADraftRequest):
+    law = payload.law.upper()
+    notice_type = payload.notice_type.upper()
+    section = payload.section
+    mode = payload.drafting_mode.lower()
 
-    # Step 1: Analyze notice
-    template = find_template(payload.law, payload.notice_type, payload.section)
+    template_key = f"{law}_{notice_type}_{section}_REPLY"
 
-    if not template:
-        return {
-            "error": "No template available for given notice"
-        }
+    metadata = TEMPLATE_METADATA.get(template_key)
+    if not metadata:
+        return {"error": "No template metadata found"}
 
-    # Step 2: Validate mandatory fields
-    missing = []
-    for field in template["mandatory_fields"]:
-        if not getattr(payload, field, None):
-            missing.append(field)
+    # Tone handling (Phase C2.2)
+    tone_map = {
+        "normal": "professional and balanced",
+        "concise": "brief and precise",
+        "aggressive": "firm and strongly defensive"
+    }
 
-    if missing:
-        return {
-            "status": "Validation Failed",
-            "missing_fields": missing,
-            "next_action": "Provide missing data"
-        }
+    tone = tone_map.get(mode, tone_map["normal"])
 
-    # Step 3: Draft (GST handled internally for now)
-    if payload.law.upper() == "GST":
-        return generate_gst_draft(
-            GSTDraftRequest(
-                notice_type=payload.notice_type,
-                section=payload.section,
-                financial_year=payload.financial_year,
-                taxpayer_name=payload.taxpayer_name,
-                gstin=payload.gstin,
-                issue_summary=payload.issue_summary
-            )
-        )
+    draft = f"""
+To  
+The Proper Officer  
+{metadata['authority']}  
+
+Subject: {metadata['subject']}  
+Financial Year: {payload.financial_year}
+
+Respected Sir/Madam,
+
+This reply is submitted in response to the notice issued to
+{payload.taxpayer_name} (GSTIN: {payload.gstin}).
+
+Issue under reference:
+{payload.issue_summary}
+
+The taxpayer submits this reply in a {tone} manner.
+All statutory compliances have been duly fulfilled.
+Any perceived discrepancy is explainable and supported
+by records available on file.
+
+The taxpayer respectfully requests an opportunity of
+being heard before any adverse decision is taken.
+
+Thanking you.
+
+Yours faithfully,  
+Authorized Signatory
+"""
 
     return {
-        "error": "Drafting not supported for this law yet"
+        "status": "CNA Draft Generated",
+        "drafting_mode": mode,
+        "template_used": template_key,
+        "draft_text": draft.strip()
     }
