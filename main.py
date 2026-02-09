@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from typing import Optional, List
 from templates_registry import TEMPLATE_REGISTRY
 
-app = FastAPI(title="CNA Backend", version="Phase C")
+app = FastAPI(title="CNA Backend", version="Phase C1")
 
-# -------------------------
-# Utilities
-# -------------------------
+# -------------------------------------------------
+# Utility: Template Resolver
+# -------------------------------------------------
 def resolve_template(law: str, notice_type: str):
     law = law.upper()
     notice_type = notice_type.upper()
@@ -16,23 +17,23 @@ def resolve_template(law: str, notice_type: str):
 
     return TEMPLATE_REGISTRY[law].get(notice_type)
 
-# -------------------------
-# Health
-# -------------------------
+# -------------------------------------------------
+# Health & Root
+# -------------------------------------------------
 @app.get("/")
 def root():
-    return {"message": "CNA Phase C is running"}
+    return {"message": "CNA Backend is running"}
 
 @app.get("/health")
 def health():
     return {
         "status": "OK",
-        "module": "CNA Phase C – Draft Engine"
+        "module": "CNA Phase C1 – Orchestrator Active"
     }
 
-# -------------------------
-# Phase A – Template Resolve
-# -------------------------
+# -------------------------------------------------
+# Phase A – Template Resolver
+# -------------------------------------------------
 class TemplateResolveRequest(BaseModel):
     law: str
     notice_type: str
@@ -44,11 +45,13 @@ def resolve_template_api(payload: TemplateResolveRequest):
     if not result:
         return {"error": "No matching template found"}
 
-    return {"template_selected": result}
+    return {
+        "template_selected": result
+    }
 
-# -------------------------
-# Phase B – Notice Analysis
-# -------------------------
+# -------------------------------------------------
+# Phase B – Notice Analyzer
+# -------------------------------------------------
 @app.post("/analyze-notice")
 def analyze_notice(payload: dict):
     law = payload.get("law")
@@ -56,7 +59,9 @@ def analyze_notice(payload: dict):
     section = payload.get("section")
 
     if not law or not notice_type or not section:
-        return {"error": "law, notice_type, section required"}
+        return {
+            "error": "law, notice_type, section required"
+        }
 
     law = law.upper()
     notice_type = notice_type.upper()
@@ -86,7 +91,7 @@ def analyze_notice(payload: dict):
                 "notice_type": "DRC-01",
                 "section": "74",
                 "risk_level": "Very High",
-                "fraud_category": "Fraud",
+                "fraud_category": "Fraud / Wilful Misstatement",
                 "mandatory_fields": [
                     "financial_year",
                     "taxpayer_name",
@@ -95,14 +100,14 @@ def analyze_notice(payload: dict):
                     "supporting_documents"
                 ],
                 "suggested_template": "GST_DRC01_74_REPLY",
-                "next_action": "Detailed defence required"
+                "next_action": "High-risk detailed response required"
             }
 
-    return {"error": "Unsupported notice"}
+    return {"error": "Unsupported notice type or law"}
 
-# -------------------------
-# Phase C – Draft Generator
-# -------------------------
+# -------------------------------------------------
+# Phase B – GST Draft Generator
+# -------------------------------------------------
 class GSTDraftRequest(BaseModel):
     notice_type: str
     section: str
@@ -127,7 +132,7 @@ Respected Sir/Madam,
 This is in reference to the above-mentioned notice issued to
 {data.taxpayer_name} (GSTIN: {data.gstin}).
 
-Issue as stated in notice:
+The notice states the following issue:
 {data.issue_summary}
 
 At the outset, the taxpayer submits that all statutory
@@ -149,3 +154,55 @@ Authorized Signatory
         "status": "Draft Generated",
         "draft_text": draft.strip()
     }
+
+# -------------------------------------------------
+# Phase C1 – Unified CNA Orchestrator
+# -------------------------------------------------
+class CNADraftRequest(BaseModel):
+    law: str
+    notice_type: str
+    section: str
+    financial_year: Optional[str] = None
+    taxpayer_name: Optional[str] = None
+    gstin: Optional[str] = None
+    issue_summary: Optional[str] = None
+
+@app.post("/cna/draft")
+def cna_draft(payload: CNADraftRequest):
+
+    # Step 1: Analyze Notice
+    analysis = analyze_notice({
+        "law": payload.law,
+        "notice_type": payload.notice_type,
+        "section": payload.section
+    })
+
+    if "error" in analysis:
+        return analysis
+
+    mandatory_fields: List[str] = analysis.get("mandatory_fields", [])
+
+    # Step 2: Missing Field Check
+    missing = []
+    for field in mandatory_fields:
+        if not getattr(payload, field, None):
+            missing.append(field)
+
+    if missing:
+        return {
+            "status": "Missing Data",
+            "missing_fields": missing,
+            "next_action": "Provide missing fields to generate draft"
+        }
+
+    # Step 3: Generate Draft
+    draft_payload = GSTDraftRequest(
+        notice_type=payload.notice_type,
+        section=payload.section,
+        financial_year=payload.financial_year,
+        taxpayer_name=payload.taxpayer_name,
+        gstin=payload.gstin,
+        issue_summary=payload.issue_summary
+    )
+
+    return generate_gst_draft(draft_payload)
